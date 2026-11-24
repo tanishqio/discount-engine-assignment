@@ -6,7 +6,7 @@
  * internal data shapes.
  *
  * Expected rules.csv columns:
- *   rule_id, scope, applies_to, type, value, stackable
+ *   rule_id, scope, applies_to, type, value, stackable, min_cart_value
  *
  * Expected cart.csv columns:
  *   item_id, product, brand, platform, base_price
@@ -38,7 +38,9 @@ export function parseRulesCSV(csvText) {
 
     if (!row.rule_id) missing.push('rule_id')
     if (!row.scope) missing.push('scope')
-    if (!row.applies_to) missing.push('applies_to')
+    //rule for missing applies_to as it can be empty for cart but not for scope value brand and platform
+    const rawscope = (row.scope || '').trim().toLowerCase()
+    if (!row.applies_to && rawscope !== 'cart') missing.push('applies_to')
     if (!row.type) missing.push('type')
     if (row.value === undefined || row.value === '') missing.push('value')
     if (row.stackable === undefined || row.stackable === '') missing.push('stackable')
@@ -49,9 +51,17 @@ export function parseRulesCSV(csvText) {
     }
 
     const scope = row.scope.trim().toLowerCase()
-    if (scope !== 'brand' && scope !== 'platform') {
-      errors.push(`Row ${rowNum}: scope must be "brand" or "platform", got "${row.scope}"`)
+    if (scope !== 'brand' && scope !== 'platform' && scope !== 'cart') {
+      errors.push(`Row ${rowNum}: scope must be "brand","platform" or "cart", got "${row.scope}"`)
       return
+    }
+    let minCartValue = null;
+    if (scope === 'cart') {
+      minCartValue = parseFloat(row.min_cart_value)
+      if (minCartValue <= 0 || isNaN(minCartValue)) {
+        errors.push(`Row ${rowNum}: value must be a positive number, got "${row.min_cart_value ?? ''}"`)
+        return
+      }
     }
 
     const type = row.type.trim().toLowerCase()
@@ -72,10 +82,11 @@ export function parseRulesCSV(csvText) {
     data.push({
       ruleId: row.rule_id.trim(),
       scope,
-      appliesTo: row.applies_to.trim(),
+      appliesTo: (row.applies_to || '').trim(),
       type,
       value,
       stackable,
+      minCartValue
     })
   })
 
