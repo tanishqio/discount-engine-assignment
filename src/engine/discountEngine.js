@@ -132,13 +132,13 @@ export function applyDiscounts(item, rules) {
   const reasoningParts = []
 
   if (winner) {
-    price = Math.max(0,price-calculateDiscountAmount(price, winner))
+    price = Math.max(0, price - calculateDiscountAmount(price, winner))
     appliedRules.push(winner.ruleId)
     reasoningParts.push(ruleToReasoning(winner))
   }
 
   for (const rule of stackable) {
-    price = Math.max(0,price-calculateDiscountAmount(price, rule))
+    price = Math.max(0, price - calculateDiscountAmount(price, rule))
     appliedRules.push(rule.ruleId)
     reasoningParts.push(ruleToReasoning(rule))
   }
@@ -189,12 +189,12 @@ export function applyCartDiscount(results, rules) {
 
   let winning_offer = null;
   let NearestRule = null;
-  for(const r of cart_rules) {
+  for (const r of cart_rules) {
 
     if (total_cart_value >= r.minCartValue) {
-      let saved = Math.min(total_cart_value,calculateDiscountAmount(total_cart_value,r));
-      if (winning_offer===null ||  winning_offer.saved < saved) {
-        winning_offer={rule:r,saved:saved}
+      let saved = Math.min(total_cart_value, calculateDiscountAmount(total_cart_value, r));
+      if (winning_offer === null || winning_offer.saved < saved) {
+        winning_offer = { rule: r, saved: saved }
       }
     }
 
@@ -210,19 +210,18 @@ export function applyCartDiscount(results, rules) {
   let final_cart_offer = null;
   if (winning_offer) {
     final_total = total_cart_value - winning_offer.saved;
-      final_cart_offer = { ruleId: winning_offer.rule.ruleId, saved: winning_offer.saved, label: "" };
-    if (winning_offer.rule.type === "percentage")
-      final_cart_offer.label = `Cart offer: ${winning_offer.rule.value}% off — Rs.${winning_offer.saved.toLocaleString('en-IN')} saved`
-    else final_cart_offer.label = `Cart offer: Rs.${winning_offer.rule.value.toLocaleString('en-IN')} off — Rs.${winning_offer.saved.toLocaleString('en-IN')} saved`
+    final_cart_offer = { ruleId: winning_offer.rule.ruleId, saved: winning_offer.saved, label: "" };
+    const offerText = winning_offer.rule.type === "percentage" ? `${winning_offer.rule.value}%` : `Rs.${winning_offer.rule.value.toLocaleString('en-IN')}`
+    final_cart_offer.label = `Rs.${total_cart_value.toLocaleString('en-IN')} ≥ Rs.${winning_offer.rule.minCartValue.toLocaleString('en-IN')} → ${offerText} off entire cart → -Rs.${winning_offer.saved.toLocaleString('en-IN')}`
   } else {
-       const offerText = NearestRule.type === "percentage" ? `${NearestRule.value}%` : `Rs.${NearestRule.value.toLocaleString('en-IN')}`
+    const offerText = NearestRule.type === "percentage" ? `${NearestRule.value}%` : `Rs.${NearestRule.value.toLocaleString('en-IN')}`
     final_nudge = `Add Rs.${(NearestRule.minCartValue - total_cart_value).toLocaleString('en-IN')} more to get ${offerText} off your cart`
   }
 
   return {
-    subtotal:total_cart_value,
-    cartOffer:final_cart_offer,
-    nudge:final_nudge,
-    finalTotal:final_total
+    subtotal: total_cart_value,
+    cartOffer: final_cart_offer,
+    nudge: final_nudge,
+    finalTotal: final_total
   }
 }
