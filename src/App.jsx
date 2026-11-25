@@ -2,16 +2,19 @@
  * App.jsx
  *
  * Top-level component. Manages state for rules, cart items, and results.
- * Wires together CSV upload → parse → engine → display.
+ * Wires together CSV / PDF upload → parse → engine → display.
  */
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import CsvUploader from './components/CsvUploader.jsx'
 import DataTable from './components/DataTable.jsx'
 import ErrorBanner from './components/ErrorBanner.jsx'
 import CartSummary from './components/CartSummary.jsx'
 import { parseRulesCSV, parseCartCSV } from './engine/csvParser.js'
 import { processCart, applyCartDiscount } from './engine/discountEngine.js'
+import PdfUploader from './components/PdfUploader.jsx'
+import { parsePdfCart } from './adapters/pdfCartAdapter.js'
+
 
 // ── Column definitions ───────────────────────────────────────────
 
@@ -116,7 +119,19 @@ export default function App() {
   const [cartErrors, setCartErrors] = useState([])
   const [cartFileName, setCartFileName] = useState('')
 
-  const [results, setResults] = useState(null)
+  const [cartNotice, setCartNotice] = useState('') // e.g. "Loaded 6 items from Order #OP-9921 ..."
+  const [pdfLoading, setPdfLoading] = useState(false)
+
+  // Results are worked out from the current cart and rules, so any change re-runs the engine.
+  // "Calculate Discounts" only decides when to start showing them.
+  const [showResults, setShowResults] = useState(false)
+  const results = useMemo(
+    () => (showResults && rules.length > 0 && cartItems.length > 0 ? processCart(cartItems, rules) : null),
+    [showResults, cartItems, rules]
+  )
+
+  const isPdfCart = /\.pdf$/i.test(cartFileName)
+
 
   // ── Handlers ──
 
@@ -125,7 +140,6 @@ export default function App() {
     setRules(data)
     setRulesErr(errors)
     setRulesFileName(fileName)
-    setResults(null) // clear stale results
   }
 
   function handleCartLoad(csvText, fileName) {
@@ -133,13 +147,38 @@ export default function App() {
     setCartItems(data)
     setCartErrors(errors)
     setCartFileName(fileName)
-    setResults(null)
+    setCartNotice('')
+  }
+
+
+  async function handlePdfLoad(file) {
+    setPdfLoading(true)
+    const { items, rowErrors, orderLine, error } = await parsePdfCart(file)
+    setPdfLoading(false)
+
+    if (items.length === 0) {
+      // Nothing usable in this PDF: keep the current cart and explain why
+      setCartErrors([error, ...rowErrors])
+      setCartNotice('')
+      return
+    }
+
+    setCartItems(items) // replace the cart
+    setCartErrors(rowErrors)
+    setCartFileName(file.name)
+    const skipped = rowErrors.length
+    setCartNotice(
+      `Loaded ${items.length} item${items.length === 1 ? '' : 's'}` +
+      (orderLine ? ` from ${orderLine}` : '') +
+      (skipped > 0 ? `, skipped ${skipped} row${skipped === 1 ? '' : 's'} (reasons below)` : '')
+    )
+    setShowResults(true) // re-run the engine right away with the current rules
   }
 
   function handleCalculate() {
-    const res = processCart(cartItems, rules)
-    setResults(res)
+    setShowResults(true)
   }
+
 
   const canCalculate = rules.length > 0 && cartItems.length > 0
 
@@ -181,14 +220,31 @@ export default function App() {
           {/* Cart upload */}
           <div style={S.section}>
             <div style={S.sectionTitle}>Cart Items</div>
-            <CsvUploader
+            {/* <CsvUploader
               label="cart.csv"
               description="Upload your cart CSV"
               onLoad={handleCartLoad}
               hasData={cartItems.length > 0}
               fileName={cartFileName}
             />
+            <ErrorBanner errors={cartErrors} /> */}
+            <CsvUploader
+              label="cart.csv"
+              description="Upload your cart CSV"
+              onLoad={handleCartLoad}
+              hasData={cartItems.length > 0 && !isPdfCart}
+              fileName={cartFileName}
+            />
+            <PdfUploader
+              onFile={handlePdfLoad}
+              loading={pdfLoading}
+              fileName={isPdfCart ? cartFileName : ''}
+            />
+            {cartNotice && (
+              <div style={{ fontSize: 12, color: '#1e5c2c', marginTop: '0.5rem' }}>{cartNotice}</div>
+            )}
             <ErrorBanner errors={cartErrors} />
+
             {cartItems.length > 0 && (
               <div style={{ marginTop: '0.75rem' }}>
                 <div style={{ fontSize: 11, color: '#888', marginBottom: 4 }}>
