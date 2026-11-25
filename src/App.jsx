@@ -14,6 +14,7 @@ import { parseRulesCSV, parseCartCSV } from './engine/csvParser.js'
 import { processCart, applyCartDiscount } from './engine/discountEngine.js'
 import PdfUploader from './components/PdfUploader.jsx'
 import { parsePdfCart } from './adapters/pdfCartAdapter.js'
+import RuleTextInput from './components/RuleTextInput.jsx'
 
 
 // ── Column definitions ───────────────────────────────────────────
@@ -108,10 +109,24 @@ const S = {
   }),
 }
 
+// Rules added by typing get the next free id: RULE-CUSTOM-1, RULE-CUSTOM-2, ...
+function nextCustomRuleId(rules) {
+  const taken = new Set(rules.map((r) => r.ruleId))
+  let n = 1
+  while (taken.has(`RULE-CUSTOM-${n}`)) n += 1
+  return `RULE-CUSTOM-${n}`
+}
+
+
+
 // ── Component ────────────────────────────────────────────────────
 
 export default function App() {
-  const [rules, setRules] = useState([])
+  // Rules from the CSV and rules typed in plain English are kept apart, so a new CSV
+  // doesn't wipe out rules the user added. The engine always gets both.
+  const [csvRules, setCsvRules] = useState([])
+  const [customRules, setCustomRules] = useState([])
+  const rules = useMemo(() => [...csvRules, ...customRules], [csvRules, customRules])
   const [rulesErrors, setRulesErr] = useState([])
   const [rulesFileName, setRulesFileName] = useState('')
 
@@ -137,7 +152,7 @@ export default function App() {
 
   function handleRulesLoad(csvText, fileName) {
     const { data, errors } = parseRulesCSV(csvText)
-    setRules(data)
+    setCsvRules(data)
     setRulesErr(errors)
     setRulesFileName(fileName)
   }
@@ -182,6 +197,42 @@ export default function App() {
   }
 
 
+  // A rule typed in plain English was confirmed: add it and show the updated results
+  function handleAddRule(rule) {
+    const ruleId = nextCustomRuleId(rules)
+    setCustomRules([...customRules, { ...rule, ruleId }])
+    setShowResults(true)
+    return ruleId
+  }
+
+  function handleRemoveRule(ruleId) {
+    setCustomRules(customRules.filter((r) => r.ruleId !== ruleId))
+  }
+
+  // Same columns as before, plus "Added by you / Remove" on the custom rules
+  const customIds = new Set(customRules.map((r) => r.ruleId))
+  const rulesColumns = [
+    ...RULES_COLUMNS,
+    {
+      key: 'actions',
+      label: '',
+      render: (_, row) =>
+        customIds.has(row.ruleId) ? (
+          <span style={{ whiteSpace: 'nowrap', fontSize: 11 }}>
+            <span style={{ color: '#888' }}>Added by you · </span>
+            <button
+              type="button"
+              onClick={() => handleRemoveRule(row.ruleId)}
+              style={{ background: 'none', border: 'none', padding: 0, color: '#c0392b', fontWeight: 700, fontSize: 11, cursor: 'pointer', textDecoration: 'underline' }}
+            >
+              Remove
+            </button>
+          </span>
+        ) : null,
+    },
+  ]
+
+
   const canCalculate = rules.length > 0 && cartItems.length > 0
 
   // ── Render ──
@@ -205,16 +256,17 @@ export default function App() {
               label="rules.csv"
               description="Upload your discount rules CSV"
               onLoad={handleRulesLoad}
-              hasData={rules.length > 0}
+              hasData={csvRules.length > 0}
               fileName={rulesFileName}
             />
             <ErrorBanner errors={rulesErrors} />
+            <RuleTextInput cartItems={cartItems} rules={rules} onConfirm={handleAddRule} />
             {rules.length > 0 && (
               <div style={{ marginTop: '0.75rem' }}>
                 <div style={{ fontSize: 11, color: '#888', marginBottom: 4 }}>
                   {rules.length} rule{rules.length > 1 ? 's' : ''} loaded
                 </div>
-                <DataTable columns={RULES_COLUMNS} rows={rules} />
+                <DataTable columns={rulesColumns} rows={rules} />
               </div>
             )}
           </div>
