@@ -14,6 +14,9 @@
 
 const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/interactions'
 const DEFAULT_MODEL = 'gemini-3.5-flash-lite' // free tier: 500 requests/day. Override with GEMINI_MODEL.
+const DEFAULT_FALLBACK_MODEL = 'gemini-3.1-flash-lite' // also free, used when the main model is busy
+// Busy or temporary errors. Free-tier limits are per model, so the second model can still answer.
+const FALLBACK_STATUSES = [429, 500, 503, 504]
 const MAX_TEXT_LENGTH = 500
 const TIMEOUT_MS = 10_000
 const MAX_KNOWN_NAMES = 50
@@ -137,6 +140,7 @@ function geminiError(status, details) {
     return { status: 500, error: 'The AI parser is not set up correctly on the server (API key rejected).' }
   }
   if (status === 404) return { status: 500, error: 'The AI model configured on the server was not found.' }
+  if (status === 503) return { status: 503, error: 'The AI service is overloaded right now. Please try again in a moment.' }
   return { status: 502, error: 'The AI service had a problem. Please try again.' }
 }
 
@@ -173,7 +177,7 @@ export default async function handler(req, res) {
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
   let rawAnswer
   try {
-    const response = await fetch(GEMINI_URL, {
+    const askGemini = (model) => fetch(GEMINI_URL, {
       method: 'POST',
       signal: controller.signal,
       headers: {
@@ -182,7 +186,7 @@ export default async function handler(req, res) {
         'Api-Revision': '2026-05-20',
       },
       body: JSON.stringify({
-        model: process.env.GEMINI_MODEL || DEFAULT_MODEL,
+        model,
         system_instruction: SYSTEM_PROMPT,
         input: JSON.stringify({
           text,
@@ -195,6 +199,18 @@ export default async function handler(req, res) {
         store: false, // don't keep the merchant's text on Google's side
       }),
     })
+
+
+    // If the main model is busy, try the second free model once. Both tries share the 10-second limit.
+    const mainModel = process.env.GEMINI_MODEL || DEFAULT_MODEL
+    const fallbackModel = process.env.GEMINI_FALLBACK_MODEL || DEFAULT_FALLBACK_MODEL
+    let response = await askGemini(mainModel)
+    if (FALLBACK_STATUSES.includes(response.status)) {
+      console.warn(`parse-rule: ${mainModel} returned ${response.status}, trying ${fallbackModel}`)
+      await new Promise((resolve) => setTimeout(resolve, 300))
+      response = await askGemini(fallbackModel)
+    }
+
 
     if (!response.ok) {
       const details = await response.text().catch(() => '')
