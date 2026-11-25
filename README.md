@@ -1,7 +1,7 @@
 # Opptra Discount Engine: FDE Intern Take-Home
 
 **Live demo:** https://discount-engine-assignment-ashy.vercel.app
-**Loom walkthrough (recorded on the live site):** _add link_
+**Loom walkthrough (recorded on the live site):** https://www.loom.com/share/40afc368c57043e68080315f82550c83
 **Base repo:** https://github.com/opptra/discount-engine-assignment
 
 A customer-facing cart pricing engine. For every cart item it picks the offer that saves the customer the most, stacks stackable offers, applies a cart-level offer after item discounts, and explains the result in plain words.
