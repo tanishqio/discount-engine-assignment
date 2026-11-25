@@ -14,6 +14,8 @@
  *   value:     number       — percentage as integer (15 = 15%), flat in rupees
  *   stackable: boolean
  *   minCartValue: number | null
+ *   addedByUser?: boolean   set by the UI for rules typed in plain English (only changes the text)
+
  * }
  *
  * CartItem {
@@ -66,18 +68,33 @@ export function calculateDiscountAmount(price, rule) {
   return 0
 }
 
-/**
- * Builds the customer-facing reasoning string for an applied rule.
- */
-function ruleToReasoning(rule) {
+const rs = (n) => `Rs.${Math.round(n).toLocaleString('en-IN')}`
+
+// "Platform offer: 15% off" / "Brand offer: Rs.150 off"
+function offerLabel(rule) {
   const scopeLabel = rule.scope === 'brand' ? 'Brand' : 'Platform'
-  if (rule.type === 'percentage') {
-    return `${scopeLabel} offer: ${rule.value}% off`
+  const amount = rule.type === 'percentage' ? `${rule.value}% off` : `${rs(rule.value)} off`
+  return `${scopeLabel} offer: ${amount}`
+}
+
+/**
+ * Builds the customer-facing text for one applied rule, only from what really happened:
+ * the rupees it saved, the offer it beat, whether it stacked on top, and whether it was capped.
+ */
+function describeAppliedRule({ rule, saving }, { isFirst, beaten }) {
+  const notes = []
+  if (beaten) {
+    notes.push(`saves ${rs(saving)}`)
+    notes.push(
+      saving > beaten.saving
+        ? `better than the ${rs(beaten.saving)} ${beaten.rule.scope} offer`
+        : `same saving as the ${beaten.rule.scope} offer`
+    )
   }
-  if (rule.type === 'flat') {
-    return `${scopeLabel} offer: Rs.${rule.value} off`
-  }
-  return `${scopeLabel} offer applied`
+  if (!isFirst) notes.push('stacked')
+  if (rule.type === 'flat' && saving < rule.value) notes.push("capped so the price can't go below Rs.0")
+  if (rule.addedByUser) notes.push('added by you')
+  return notes.length > 0 ? `${offerLabel(rule)} (${notes.join(', ')})` : offerLabel(rule)
 }
 
 /**
@@ -105,7 +122,7 @@ export function applyDiscounts(item, rules) {
       totalDiscount: 0,
       appliedRules: [],
       skippedRules: [],
-      reasoning: 'No offers available',
+      reasoning: `No offers available for ${item.brand} on ${item.platform}`,
     }
   }
 
@@ -126,24 +143,34 @@ export function applyDiscounts(item, rules) {
     skipped = sorted.slice(1)
   }
 
-  // Apply winner first, then stack on top
+  // Apply winner first, then stack on top. Record what each rule really saved.
   let price = item.basePrice
-  const appliedRules = []
-  const reasoningParts = []
+  const applied = [] // { rule, saving }
 
   if (winner) {
+    const before = price
     price = Math.max(0, price - calculateDiscountAmount(price, winner))
-    appliedRules.push(winner.ruleId)
-    reasoningParts.push(ruleToReasoning(winner))
+    applied.push({ rule: winner, saving: before - price })
   }
 
   for (const rule of stackable) {
+    const before = price
     price = Math.max(0, price - calculateDiscountAmount(price, rule))
-    appliedRules.push(rule.ruleId)
-    reasoningParts.push(ruleToReasoning(rule))
+    applied.push({ rule, saving: before - price })
   }
 
   const finalPrice = Math.round(price)
+
+  // The best offer that lost to the winner, so the text can say why the winner was picked
+  const runnerUp = skipped[0]
+  const beaten = runnerUp
+    ? { rule: runnerUp, saving: Math.min(item.basePrice, calculateDiscountAmount(item.basePrice, runnerUp)) }
+    : null
+
+  const reasoning = applied
+    .map((part, i) => describeAppliedRule(part, { isFirst: i === 0, beaten: i === 0 && part.rule === winner ? beaten : null }))
+    .join(' + ')
+
 
   return {
     itemId: item.itemId,
@@ -153,9 +180,9 @@ export function applyDiscounts(item, rules) {
     basePrice: item.basePrice,
     finalPrice,
     totalDiscount: item.basePrice - finalPrice,
-    appliedRules,
+    appliedRules: applied.map((part) => part.rule.ruleId),
     skippedRules: skipped.map((r) => r.ruleId),
-    reasoning: reasoningParts.join(' + '),
+    reasoning,
   }
 }
 

@@ -66,8 +66,8 @@ const RESULTS_COLUMNS = [
   {
     key: 'reasoning',
     label: 'Offer Applied',
-    render: (v) => (
-      <span style={{ color: v === 'No offers available' ? '#888' : '#131A48', fontStyle: v === 'No offers available' ? 'italic' : 'normal' }}>
+        render: (v, row) => (
+      <span style={{ color: row.appliedRules.length === 0 ? '#888' : '#131A48', fontStyle: row.appliedRules.length === 0 ? 'italic' : 'normal' }}>
         {v}
       </span>
     ),
@@ -200,7 +200,7 @@ export default function App() {
   // A rule typed in plain English was confirmed: add it and show the updated results
   function handleAddRule(rule) {
     const ruleId = nextCustomRuleId(rules)
-    setCustomRules([...customRules, { ...rule, ruleId }])
+    setCustomRules([...customRules, { ...rule, ruleId, addedByUser: true }])
     setShowResults(true)
     return ruleId
   }
