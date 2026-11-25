@@ -7,12 +7,14 @@
  *
  * Expected rules.csv columns:
  *   rule_id, scope, applies_to, type, value, stackable, min_cart_value
+ *   Each row is checked by validateRule() in ruleValidation.js.
  *
  * Expected cart.csv columns:
  *   item_id, product, brand, platform, base_price
  */
 
 import Papa from 'papaparse'
+import { validateRule } from './ruleValidation.js'
 
 /**
  * Parses the raw text of rules.csv into an array of DiscountRule objects.
@@ -34,60 +36,22 @@ export function parseRulesCSV(csvText) {
 
   rows.forEach((row, i) => {
     const rowNum = i + 2 // account for header row
-    const missing = []
-
-    if (!row.rule_id) missing.push('rule_id')
-    if (!row.scope) missing.push('scope')
-    //rule for missing applies_to as it can be empty for cart but not for scope value brand and platform
-    const rawscope = (row.scope || '').trim().toLowerCase()
-    if (!row.applies_to && rawscope !== 'cart') missing.push('applies_to')
-    if (!row.type) missing.push('type')
-    if (row.value === undefined || row.value === '') missing.push('value')
-    if (row.stackable === undefined || row.stackable === '') missing.push('stackable')
-
-    if (missing.length > 0) {
-      errors.push(`Row ${rowNum}: missing fields — ${missing.join(', ')}`)
-      return
-    }
-
-    const scope = row.scope.trim().toLowerCase()
-    if (scope !== 'brand' && scope !== 'platform' && scope !== 'cart') {
-      errors.push(`Row ${rowNum}: scope must be "brand","platform" or "cart", got "${row.scope}"`)
-      return
-    }
-    let minCartValue = null;
-    if (scope === 'cart') {
-      minCartValue = parseFloat(row.min_cart_value)
-      if (minCartValue <= 0 || isNaN(minCartValue)) {
-        errors.push(`Row ${rowNum}: value must be a positive number, got "${row.min_cart_value ?? ''}"`)
-        return
-      }
-    }
-
-    const type = row.type.trim().toLowerCase()
-    if (type !== 'percentage' && type !== 'flat') {
-      errors.push(`Row ${rowNum}: type must be "percentage" or "flat", got "${row.type}"`)
-      return
-    }
-
-    const value = parseFloat(row.value)
-    if (isNaN(value) || value <= 0) {
-      errors.push(`Row ${rowNum}: value must be a positive number, got "${row.value}"`)
-      return
-    }
-
-    const stackableStr = row.stackable.trim().toLowerCase()
-    const stackable = stackableStr === 'true' || stackableStr === '1' || stackableStr === 'yes'
-
-    data.push({
-      ruleId: row.rule_id.trim(),
-      scope,
-      appliesTo: (row.applies_to || '').trim(),
-      type,
-      value,
-      stackable,
-      minCartValue
+    // Rename CSV columns to engine field names, then let the validator check everything
+    const result = validateRule({
+      ruleId: row.rule_id,
+      scope: row.scope,
+      appliesTo: row.applies_to,
+      type: row.type,
+      value: row.value,
+      stackable: row.stackable,
+      minCartValue: row.min_cart_value,
     })
+
+    if (result.ok) {
+      data.push(result.rule)
+    } else {
+      errors.push(`Row ${rowNum}: ${result.errors.join('; ')}`)
+    }
   })
 
   return { data, errors }
