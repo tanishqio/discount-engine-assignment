@@ -253,7 +253,7 @@ export function piecesToCart(pieces) {
     return result({ orderLine, error: 'The table has no item rows.' })
   }
   if (items.length === 0) {
-    return result({ rowErrors, orderLine, error: 'None of the rows could be read, so your cart was not changed.' })
+    return result({ rowErrors, orderLine, error: 'None of the rows could be read.' })
   }
   return result({ items, rowErrors, orderLine })
 }

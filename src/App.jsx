@@ -158,6 +158,8 @@ export default function App() {
 
     if (items.length === 0) {
       // Nothing usable in this PDF: keep the current cart and explain why
+      setCartItems([])
+      setCartFileName('')
       setCartErrors([error, ...rowErrors])
       setCartNotice('')
       return
