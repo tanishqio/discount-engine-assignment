@@ -274,14 +274,6 @@ export default function App() {
           {/* Cart upload */}
           <div style={S.section}>
             <div style={S.sectionTitle}>Cart Items</div>
-            {/* <CsvUploader
-              label="cart.csv"
-              description="Upload your cart CSV"
-              onLoad={handleCartLoad}
-              hasData={cartItems.length > 0}
-              fileName={cartFileName}
-            />
-            <ErrorBanner errors={cartErrors} /> */}
             <CsvUploader
               label="cart.csv"
               description="Upload your cart CSV"

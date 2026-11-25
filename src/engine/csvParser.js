@@ -86,11 +86,11 @@ export function parseCartCSV(csvText) {
     if (row.base_price === undefined || row.base_price === '') missing.push('base_price')
 
     if (missing.length > 0) {
-      errors.push(`Row ${rowNum}: missing fields — ${missing.join(', ')}`)
+      errors.push(`Row ${rowNum}: missing fields: ${missing.join(', ')}`)
       return
     }
 
-    const basePrice = parseFloat(row.base_price)
+   const basePrice = parseFloat(String(row.base_price).replace(/,/g, ''))
     if (isNaN(basePrice) || basePrice <= 0) {
       errors.push(`Row ${rowNum}: base_price must be a positive number, got "${row.base_price}"`)
       return
