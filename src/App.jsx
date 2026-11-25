@@ -11,14 +11,14 @@ import DataTable from './components/DataTable.jsx'
 import ErrorBanner from './components/ErrorBanner.jsx'
 import CartSummary from './components/CartSummary.jsx'
 import { parseRulesCSV, parseCartCSV } from './engine/csvParser.js'
-import { processCart, applyCartDiscount  } from './engine/discountEngine.js'
+import { processCart, applyCartDiscount } from './engine/discountEngine.js'
 
 // ── Column definitions ───────────────────────────────────────────
 
 const RULES_COLUMNS = [
   { key: 'ruleId', label: 'Rule ID' },
   { key: 'scope', label: 'Scope', render: (v) => v.charAt(0).toUpperCase() + v.slice(1) },
-  { key: 'appliesTo', label: 'Applies To' },
+  { key: 'appliesTo', label: 'Applies To', render: (v, row) => row.scope === 'cart' ? 'Entire cart' : v },
   { key: 'type', label: 'Type', render: (v) => v.charAt(0).toUpperCase() + v.slice(1) },
   {
     key: 'value',
@@ -26,6 +26,7 @@ const RULES_COLUMNS = [
     render: (v, row) => row.type === 'percentage' ? `${v}% off` : `Rs.${v} off`,
   },
   { key: 'stackable', label: 'Stackable', render: (v) => (v ? 'Yes' : 'No') },
+  { key: 'minCartValue', label: 'Condition', render: (v) => v ? `Cart total ≥ Rs.${v.toLocaleString('en-IN')}` : '-' }
 ]
 
 const CART_COLUMNS = [
