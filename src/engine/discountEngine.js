@@ -8,11 +8,12 @@
  *
  * DiscountRule {
  *   ruleId:    string       — e.g. "RULE-01"
- *   scope:     "brand" | "platform"
+ *   scope:     "brand" | "platform" | "cart"
  *   appliesTo: string       — e.g. "Natura Casa", "Amazon India"
  *   type:      "percentage" | "flat"
  *   value:     number       — percentage as integer (15 = 15%), flat in rupees
  *   stackable: boolean
+ *   minCartValue: number | null
  * }
  *
  * CartItem {
@@ -131,13 +132,13 @@ export function applyDiscounts(item, rules) {
   const reasoningParts = []
 
   if (winner) {
-    price -= calculateDiscountAmount(price, winner)
+    price = Math.max(0,price-calculateDiscountAmount(price, winner))
     appliedRules.push(winner.ruleId)
     reasoningParts.push(ruleToReasoning(winner))
   }
 
   for (const rule of stackable) {
-    price -= calculateDiscountAmount(price, rule)
+    price = Math.max(0,price-calculateDiscountAmount(price, rule))
     appliedRules.push(rule.ruleId)
     reasoningParts.push(ruleToReasoning(rule))
   }
@@ -171,4 +172,57 @@ export function processCart(cartItems, rules) {
  */
 export function cartTotal(results) {
   return results.reduce((sum, r) => sum + r.finalPrice, 0)
+}
+
+export function applyCartDiscount(results, rules) {
+  const total_cart_value = cartTotal(results);
+
+  const cart_rules = rules.filter((r) => r.scope === "cart");
+  if (cart_rules.length == 0) {
+    return {
+      subtotal: total_cart_value,
+      cartOffer: null,
+      finalTotal: total_cart_value,
+      nudge: null
+    }
+  }
+
+  let winning_offer = null;
+  let NearestRule = null;
+  for(const r of cart_rules) {
+
+    if (total_cart_value >= r.minCartValue) {
+      let saved = Math.min(total_cart_value,calculateDiscountAmount(total_cart_value,r));
+      if (winning_offer===null ||  winning_offer.saved < saved) {
+        winning_offer={rule:r,saved:saved}
+      }
+    }
+
+    if (!NearestRule) {
+      NearestRule = r;
+    }
+    else if (Math.abs(NearestRule.minCartValue - total_cart_value) > Math.abs(r.minCartValue - total_cart_value)) {
+      NearestRule = r;
+    }
+  }
+  let final_total = total_cart_value;
+  let final_nudge = null;
+  let final_cart_offer = null;
+  if (winning_offer) {
+    final_total = total_cart_value - winning_offer.saved;
+      final_cart_offer = { ruleId: winning_offer.rule.ruleId, saved: winning_offer.saved, label: "" };
+    if (winning_offer.rule.type === "percentage")
+      final_cart_offer.label = `Cart offer: ${winning_offer.rule.value}% off — Rs.${winning_offer.saved} saved`
+    else final_cart_offer.label = `Cart offer: Rs.${winning_offer.rule.value} off — Rs.${winning_offer.saved} saved`
+  } else {
+       const offerText = NearestRule.type === "percentage" ? `${NearestRule.value}%` : `Rs.${NearestRule.value}`
+    final_nudge = `Add Rs.${NearestRule.minCartValue - total_cart_value} more to get ${offerText} off your cart`
+  }
+
+  return {
+    subtotal:total_cart_value,
+    cartOffer:final_cart_offer,
+    nudge:final_nudge,
+    finalTotal:final_total
+  }
 }
